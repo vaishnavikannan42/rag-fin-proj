@@ -1,0 +1,5 @@
+question,expected_answer,tickers,period
+"What was Amazon's Q3 2025 revenue?","$158.9 billion","AMZN","Q3-2025"
+"What was Amazon's AWS revenue growth in Q3 2025?","AWS revenue grew 19% year-over-year","AMZN","Q3-2025"
+"What was Amazon's operating income in Q3 2025?","$17.4 billion","AMZN","Q3-2025"
+

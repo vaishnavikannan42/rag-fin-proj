@@ -4,9 +4,11 @@ from typing import List, Optional, Tuple
 
 from ...ingestion.metadata_schema import Chunk
 from ...vectorstore.chroma_store import ChromaVectorStore
-from ..dependencies import get_app_settings, get_openai_client
+from ..dependencies import get_app_settings, get_openai_client, get_openrouter_client
+from ..models_registry import get_model_id
 from ..openai_client import OpenAIClient
-from ..schemas import ChatRequest, ChatResponse
+from ..openrouter_client import OpenRouterClient
+from ..schemas import ChatRequest, ChatResponse, UsageInfo
 from .citation import build_citations
 from .ranking import rerank_by_distance
 from .retriever import Retriever
@@ -31,10 +33,16 @@ def _format_context(chunks_with_scores: List[Tuple[Chunk, float]]) -> str:
 
 
 class RAGService:
-    def __init__(self, vector_store: ChromaVectorStore, openai_client: Optional[OpenAIClient] = None) -> None:
+    def __init__(
+        self,
+        vector_store: ChromaVectorStore,
+        openai_client: Optional[OpenAIClient] = None,
+        openrouter_client: Optional[OpenRouterClient] = None,
+    ) -> None:
         self._vector_store = vector_store
         self._retriever = Retriever(vector_store)
         self._openai = openai_client or get_openai_client()
+        self._openrouter = openrouter_client
 
     def answer(self, request: ChatRequest) -> ChatResponse:
         chunks_with_scores = self._retriever.retrieve(
@@ -46,7 +54,31 @@ class RAGService:
         ranked = rerank_by_distance(chunks_with_scores)
         context = _format_context(ranked)
         system_prompt = SYSTEM_PROMPT + "\n\nContext:\n" + context
-        answer_text = self._openai.chat(system_prompt=system_prompt, user_message=request.question)
+
+        # Use OpenRouter if a specific model is requested, otherwise use default OpenAI client
+        usage_info: Optional[UsageInfo] = None
+        model_used: Optional[str] = None
+
+        if request.model:
+            # Use OpenRouter for multi-model evaluation
+            model_id = get_model_id(request.model)
+            openrouter = self._openrouter or get_openrouter_client(model_id)
+            result = openrouter.chat(
+                system_prompt=system_prompt,
+                user_message=request.question,
+                model=model_id,
+            )
+            answer_text = result.answer
+            usage_info = UsageInfo(
+                input_tokens=result.input_tokens,
+                output_tokens=result.output_tokens,
+                total_tokens=result.total_tokens,
+                cost=result.cost,
+            )
+            model_used = result.model
+        else:
+            # Use default OpenAI client
+            answer_text = self._openai.chat(system_prompt=system_prompt, user_message=request.question)
 
         chunks_only: List[Chunk] = [cw[0] for cw in ranked]
         citations = build_citations(chunks_only)
@@ -58,7 +90,13 @@ class RAGService:
             }
             for chunk, score in ranked
         ]
-        return ChatResponse(answer=answer_text, citations=citations, raw_context=raw_context)
+        return ChatResponse(
+            answer=answer_text,
+            citations=citations,
+            raw_context=raw_context,
+            model=model_used,
+            usage=usage_info,
+        )
 
 
 def get_rag_service() -> RAGService:

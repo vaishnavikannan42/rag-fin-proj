@@ -19,17 +19,41 @@ class Citation(BaseModel):
     highlight_url: Optional[str] = None
 
 
+class UsageInfo(BaseModel):
+    """Token usage and cost information for a request."""
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
+    cost: float = 0.0  # Cost in USD
+
+
 class ChatRequest(BaseModel):
     question: str
     tickers: Optional[List[str]] = None
     period: Optional[str] = None
     top_k: int = 8
+    model: Optional[str] = None  # OpenRouter model ID for evaluation
 
 
 class ChatResponse(BaseModel):
     answer: str
     citations: List[Citation]
     raw_context: Optional[List[dict[str, Any]]] = None
+    model: Optional[str] = None  # Model used for this response
+    usage: Optional[UsageInfo] = None  # Token usage and cost tracking
+
+
+class ParseQueryRequest(BaseModel):
+    """Request to parse a user query for entity extraction."""
+    question: str
+
+
+class ParseQueryResponse(BaseModel):
+    """Response containing extracted entities from a user query."""
+    tickers: Optional[List[str]] = None
+    period: Optional[str] = None
+    needs_clarification: bool = False
+    clarification_message: Optional[str] = None
 
 
 
