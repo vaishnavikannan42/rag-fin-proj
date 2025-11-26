@@ -54,11 +54,18 @@ An intelligent LLM-powered chatbot that answers questions about company financia
 
 ## 🚀 Quick Start
 
+### Prerequisites
+
+- **Python 3.10+** installed
+- **Git** installed
+- **OpenAI API Key** (required) - Get one at [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
+- **OpenRouter API Key** (optional, for multi-model evaluation) - Get one at [openrouter.ai/keys](https://openrouter.ai/keys)
+
 ### 1. Clone & Setup Environment
 
 ```bash
-git clone https://github.com/yourusername/financial-rag-chatbot.git
-cd financial-rag-chatbot
+git clone https://github.com/ARJUNVARMA2000/Financial-RAG-Chatbot.git
+cd Financial-RAG-Chatbot
 
 # Create virtual environment
 python -m venv venv
@@ -75,7 +82,17 @@ pip install -r requirements.txt
 
 ### 2. Configure Environment Variables
 
-Create a `.env` file in the project root:
+Create a `.env` file in the project root (you can copy from `env.example.txt`):
+
+```bash
+# On Windows:
+copy env.example.txt .env
+
+# On macOS/Linux:
+cp env.example.txt .env
+```
+
+Then edit `.env` and add your API keys:
 
 ```bash
 # OpenAI API Configuration (required)
@@ -89,6 +106,8 @@ OPENAI_EMBEDDING_MODEL=text-embedding-3-large
 OPENROUTER_API_KEY=your_openrouter_api_key_here
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 ```
+
+> **Note:** The `.env` file is gitignored for security. Never commit your API keys!
 
 ### 3. Add Documents & Build Index
 
@@ -120,9 +139,35 @@ The API will be available at `http://localhost:8000`
 
 ### 5. Launch the Chat UI
 
+In a **new terminal** (keep the backend running):
+
 ```bash
+# Make sure your virtual environment is activated
 streamlit run frontend/streamlit_app.py
 ```
+
+The UI will open at `http://localhost:8501`
+
+---
+
+### Quick Verification
+
+1. ✅ Backend is running: Visit `http://localhost:8000/docs` (Swagger UI)
+2. ✅ Frontend is running: Visit `http://localhost:8501`
+3. ✅ Test a query in the Streamlit UI
+
+---
+
+### Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| **Module not found** | Ensure virtual environment is activated and run `pip install -r requirements.txt` |
+| **API key error** | Check your `.env` file exists and `OPENAI_API_KEY` is set correctly |
+| **No documents found** | Ensure documents are in `data/raw/<TICKER>/` and you've built the index |
+| **Port already in use** | Stop other services using ports 8000 or 8501, or change ports in commands |
+
+For detailed setup instructions, see [SETUP_GUIDE.md](SETUP_GUIDE.md).
 
 ---
 
