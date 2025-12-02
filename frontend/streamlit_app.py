@@ -218,12 +218,7 @@ def handle_question(question: str, top_k: int):
     # 1. Display User Message (add to history immediately)
     st.session_state.messages.append({"role": "user", "content": question})
     
-    # We can't render the user message *here* because this function might be called 
-    # from a button callback, where `st.chat_message` context might not be ideal 
-    # or would disappear on rerun. We rely on the main loop to render history.
-    
     # 2. Analyze & Search
-    # We use a placeholder for status since we might be inside a callback
     status_placeholder = st.empty()
     
     with status_placeholder.status("Analyzing & Searching...", expanded=False) as status:
@@ -237,10 +232,8 @@ def handle_question(question: str, top_k: int):
         
         # Handle Clarification
         if parsed.get("needs_clarification"):
-            msg = parsed.get("clarification_message", "Could not detect specific entities.")
-            # Show a toast for immediate feedback without cluttering chat
+            msg = parsed.get("clarification_message") or "Could not detect specific entities."
             st.toast(f"Insight: {msg}", icon="💡")
-            # Also write to status for record
             status.write(f"⚠️ {msg}")
         
         if new_tickers:
@@ -282,19 +275,20 @@ def handle_question(question: str, top_k: int):
             citations = []
 
     # 3. Save Assistant Response (and Metadata)
+    clarification_needed = bool(parsed.get("needs_clarification") or False)  # >>> FIX
+    clarification_msg = parsed.get("clarification_message") or "Could not detect entities."  # >>> FIX
+
     message_data = {
         "role": "assistant",
         "content": answer,
         "citations": citations,
-        # Save context to display chips
         "context_tickers": new_tickers if new_tickers else tickers_list,
         "context_period": new_period if new_period else period_str,
-        "clarification_needed": parsed.get("needs_clarification"),
-        "clarification_msg": parsed.get("clarification_message"),
+        "clarification_needed": clarification_needed,   # always bool
+        "clarification_msg": clarification_msg,         # always string
     }
     st.session_state.messages.append(message_data)
 
-    # Clear status placeholder (optional, keeps UI clean)
     status_placeholder.empty()
 
 
@@ -373,21 +367,21 @@ def main() -> None:
     # Display Chat History
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
-            # If it's an assistant message, we might have metadata (chips/warnings)
             if msg["role"] == "assistant":
                 # 1. Warning Card
-                if msg.get("clarification_needed"):
+                if msg.get("clarification_needed") is True:  # >>> FIX
+                    clar_text = msg.get("clarification_msg") or "Could not detect entities."  # >>> FIX
                     st.markdown(
                         f"""
                         <div class="warning-card">
                             <span style="font-size: 1.2em; margin-right: 10px;">⚠️</span>
                             <div>
                                 <strong>Clarification Needed</strong><br/>
-                                {msg.get('clarification_msg', 'Could not detect entities.')}
+                                {clar_text}
                             </div>
                         </div>
-                        """, 
-                        unsafe_allow_html=True
+                        """,
+                        unsafe_allow_html=True,
                     )
 
                 # 2. Context Chips
@@ -396,7 +390,6 @@ def main() -> None:
                 if tickers or period:
                     chips_html = '<div class="chip-container">'
                     if tickers:
-                        # If list, join. If string, just use.
                         t_str = ", ".join(tickers) if isinstance(tickers, list) else str(tickers)
                         chips_html += f'<span class="chip"><span class="chip-icon">🏢</span>{t_str}</span>'
                     if period:
@@ -404,7 +397,11 @@ def main() -> None:
                     chips_html += '</div>'
                     st.markdown(chips_html, unsafe_allow_html=True)
 
-            st.write(msg["content"])
+            # >>> FIX: guard against None content
+            content = msg.get("content")
+            if content:
+                st.write(content)
+
             if "citations" in msg and msg["citations"]:
                 with st.expander(f"📚 {len(msg['citations'])} References", expanded=False):
                     for idx, citation in enumerate(msg["citations"], start=1):
@@ -412,13 +409,11 @@ def main() -> None:
                         line_start = citation.get('line_start')
                         line_end = citation.get('line_end')
                         
-                        # Format page display
                         if page_num:
                             page_display = f"Page {page_num}"
                         else:
                             page_display = "Page N/A"
                         
-                        # Format line display
                         if line_start and line_end:
                             line_display = f"Lines {line_start}-{line_end}"
                         elif line_start:
@@ -432,20 +427,22 @@ def main() -> None:
                         doc_title = citation.get('doc_title', '')
                         relevance_score = citation.get('relevance_score')
                         
-                        # Format relevance score
                         relevance_display = ""
                         if relevance_score is not None:
                             relevance_percent = int(relevance_score * 100)
-                            # Color based on relevance: green for high, yellow for medium, gray for low
                             if relevance_score >= 0.7:
-                                relevance_color = "#10b981"  # green
+                                relevance_color = "#10b981"
                             elif relevance_score >= 0.5:
-                                relevance_color = "#f59e0b"  # yellow
+                                relevance_color = "#f59e0b"
                             else:
-                                relevance_color = "#6b7280"  # gray
-                            relevance_display = f'<span style="background: {relevance_color}20; color: {relevance_color}; padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem; font-weight: 600; margin-left: 0.5rem;">{relevance_percent}% match</span>'
+                                relevance_color = "#6b7280"
+                            relevance_display = (
+                                f'<span style="background: {relevance_color}20; '
+                                f'color: {relevance_color}; padding: 0.25rem 0.5rem; '
+                                f'border-radius: 0.25rem; font-size: 0.75rem; font-weight: 600; '
+                                f'margin-left: 0.5rem;">{relevance_percent}% match</span>'
+                            )
                         
-                        # Create a more visually appealing citation card
                         st.markdown(f"""
                         <div style="
                             background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
@@ -469,7 +466,6 @@ def main() -> None:
                         </div>
                         """, unsafe_allow_html=True)
                         
-                        # Action buttons in columns
                         cols = st.columns([1, 1, 1])
                         highlight_url = citation.get("highlight_url")
                         source_url = citation.get("source_url")
@@ -480,7 +476,6 @@ def main() -> None:
                         if source_url:
                             cols[1].link_button("📄 Source PDF", source_url, use_container_width=True)
                         
-                        # Show text preview
                         if citation_text:
                             with cols[2].expander("👁️ Preview", expanded=False):
                                 preview_text = citation_text[:300]
@@ -492,6 +487,7 @@ def main() -> None:
     if prompt := st.chat_input("Ask a question about financials..."):
         handle_question(prompt, top_k)
         st.rerun()
+
 
 if __name__ == "__main__":
     main()
